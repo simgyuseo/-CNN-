@@ -1,0 +1,225 @@
+--필요한 라이브러리 다운로드
+import numpy as np
+import pandas as pd
+import os
+import cv2
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow import keras
+from PIL import Image
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.optimizers import Adam
+from sklearn.metrics import accuracy_score
+np.random.seed(42)
+
+
+
+--교통 표지판 데이터셋 할당 경로 설정 및 이미지 사이즈 재할당
+data_dir = '../input/gtsrb-german-traffic-sign'
+train_path = '../input/gtsrb-german-traffic-sign/Train'
+test_path = '../input/gtsrb-german-traffic-sign/'
+
+IMG_HEIGHT = 30
+IMG_WIDTH = 30
+channels = 3
+
+
+
+--데이터셋(트레이닝용, 테스트용) 시각화
+folders = os.listdir(train_path)
+
+train_number = []
+class_num = []
+
+for folder in folders:
+    train_files = os.listdir(train_path + '/' + folder)
+    train_number.append(len(train_files))
+    class_num.append(classes[int(folder)])
+    
+# Sorting the dataset on the basis of number of images in each class
+zipped_lists = zip(train_number, class_num)
+sorted_pairs = sorted(zipped_lists)
+tuples = zip(*sorted_pairs)
+train_number, class_num = [ list(tuple) for tuple in  tuples]
+
+# Plotting the number of images in each class
+plt.figure(figsize=(21,10))  
+plt.bar(class_num, train_number)
+plt.xticks(class_num, rotation='vertical')
+plt.show()
+
+import random
+from matplotlib.image import imread
+
+test = pd.read_csv(data_dir + '/Test.csv')
+imgs = test["Path"].values
+
+plt.figure(figsize=(25,25))
+
+for i in range(1,26):
+    plt.subplot(5,5,i)
+    random_img_path = data_dir + '/' + random.choice(imgs)
+    rand_img = imread(random_img_path)
+    plt.imshow(rand_img)
+    plt.grid(b=None)
+    plt.xlabel(rand_img.shape[1], fontsize = 20)#width of image
+    plt.ylabel(rand_img.shape[0], fontsize = 20)#height of image
+
+
+                           
+--학습 시킬 데이터셋(트레이닝용) 모으기
+image_data = []
+image_labels = []
+
+for i in range(NUM_CATEGORIES):
+    path = data_dir + '/Train/' + str(i)
+    images = os.listdir(path)
+
+    for img in images:
+        try:
+            image = cv2.imread(path + '/' + img)
+            image_fromarray = Image.fromarray(image, 'RGB')
+            resize_image = image_fromarray.resize((IMG_HEIGHT, IMG_WIDTH))
+            image_data.append(np.array(resize_image))
+            image_labels.append(i)
+        except:
+            print("Error in " + img)
+
+# Changing the list to numpy array
+image_data = np.array(image_data)
+image_labels = np.array(image_labels)
+
+print(image_data.shape, image_labels.shape
+
+
+
+--트레이닝용 데이터 섞기
+shuffle_indexes = np.arange(image_data.shape[0])
+np.random.shuffle(shuffle_indexes)
+image_data = image_data[shuffle_indexes]
+image_labels = image_labels[shuffle_indexes]
+
+
+      
+--트레이닝용 데이터셋과 검증용 데이터셋으로 데이터 나누기(이미지 데이터 크기)
+X_train, X_val, y_train, y_val = train_test_split(image_data, image_labels, test_size=0.3, random_state=42, shuffle=True)
+
+X_train = X_train/255 
+X_val = X_val/255
+
+print("X_train.shape", X_train.shape)
+print("X_valid.shape", X_val.shape)
+print("y_train.shape", y_train.shape)
+print("y_valid.shape", y_val.shape)
+
+
+      
+--CNN모델 만들기
+model = keras.models.Sequential([    
+    keras.layers.Conv2D(filters=16, kernel_size=(3,3), activation='relu', input_shape=(IMG_HEIGHT,IMG_WIDTH,channels)),
+    keras.layers.Conv2D(filters=32, kernel_size=(3,3), activation='relu'),
+    keras.layers.MaxPool2D(pool_size=(2, 2)),
+    keras.layers.BatchNormalization(axis=-1),
+    
+    keras.layers.Conv2D(filters=64, kernel_size=(3,3), activation='relu'),
+    keras.layers.Conv2D(filters=128, kernel_size=(3,3), activation='relu'),
+    keras.layers.MaxPool2D(pool_size=(2, 2)),
+    keras.layers.BatchNormalization(axis=-1),
+    
+    keras.layers.Flatten(),
+    keras.layers.Dense(512, activation='relu'),
+    keras.layers.BatchNormalization(),
+    keras.layers.Dropout(rate=0.5),
+    
+    keras.layers.Dense(43, activation='softmax')
+])
+lr = 0.001
+epochs = 30
+
+opt = Adam(lr=lr, decay=lr / (epochs * 0.5))
+model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+
+
+      
+--모델 평가 
+pd.DataFrame(history.history).plot(figsize=(8, 5))
+plt.grid(True)
+plt.gca().set_ylim(0, 1)
+plt.show()
+
+
+      
+--테스트용 데이터와 그 예측값을 돌린 정확성 판단
+test = pd.read_csv(data_dir + '/Test.csv')
+
+labels = test["ClassId"].values
+imgs = test["Path"].values
+
+data =[]
+
+for img in imgs:
+    try:
+        image = cv2.imread(data_dir + '/' +img)
+        image_fromarray = Image.fromarray(image, 'RGB')
+        resize_image = image_fromarray.resize((IMG_HEIGHT, IMG_WIDTH))
+        data.append(np.array(resize_image))
+    except:
+        print("Error in " + img)
+X_test = np.array(data)
+X_test = X_test/255
+
+pred = model.predict_classes(X_test)
+
+#Accuracy with the test data
+print('Test Data accuracy: ',accuracy_score(labels, pred)*100)
+
+
+      
+--분류 보고서
+from sklearn.metrics import classification_report
+
+print(classification_report(labels, pred))
+
+
+      
+--테스트데이터 예측률
+plt.figure(figsize = (25, 25))
+
+start_index = 0
+for i in range(25):
+    plt.subplot(5, 5, i + 1)
+    plt.grid(False)
+    plt.xticks([])
+    plt.yticks([])
+    prediction = pred[start_index + i]
+    actual = labels[start_index + i]
+    col = 'g'
+    if prediction != actual:
+        col = 'r'
+    plt.xlabel('Actual={} || Pred={}'.format(actual, prediction), color = col)
+    plt.imshow(X_test[start_index + i])
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+                           
+
+
+
+
+
+
+
+
+
+                           
